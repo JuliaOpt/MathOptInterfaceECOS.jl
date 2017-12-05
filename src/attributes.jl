@@ -38,27 +38,27 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.PrimalStatus)
         m.solve_stat = MOI.OtherResultStatus
     end
 end
-function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, r::MOI.AnyReference)
+function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::MOI.Index)
     instance.ret_val != ECOS_PINF
 end
-function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, r::Vector{<:MOI.AnyReference})
+function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::Vector{<:MOI.Index})
     instance.ret_val != ECOS_PINF
 end
-function MOI.get(instance::ECOSSolverInstance, ::MOI.VariablePrimal, vr::VR)
-    instance.primal[instance.varmap[vr]]
+function MOI.get(instance::ECOSSolverInstance, ::MOI.VariablePrimal, vi::VI)
+    instance.primal[instance.varmap[vi]]
 end
-MOI.get(instance::ECOSSolverInstance, a::MOI.VariablePrimal, vr::Vector{VR}) = MOI.get.(instance, a, vr)
+MOI.get(instance::ECOSSolverInstance, a::MOI.VariablePrimal, vi::Vector{VI}) = MOI.get.(instance, a, vi)
 _unshift(value, s) = value
 _unshift(value, s::MOI.EqualTo) = value + s.value
 _unshift(value, s::MOI.GreaterThan) = value + s.lower
 _unshift(value, s::MOI.LessThan) = value + s.upper
-function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, cr::CR{<:MOI.AbstractFunction, <:ZeroCones})
-    s = MOI.get(instance, MOI.ConstraintSet(), cr)
+function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI{<:MOI.AbstractFunction, <:ZeroCones})
+    s = MOI.get(instance, MOI.ConstraintSet(), ci)
     zeros(_dimension(s))
 end
-function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, cr::CR)
-    offset = instance.constrmap[cr.value]
-    s = MOI.get(instance, MOI.ConstraintSet(), cr)
+function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI)
+    offset = instance.constrmap[ci.value]
+    s = MOI.get(instance, MOI.ConstraintSet(), ci)
     rows = constrrows(s)
     _unshift(scalecoef(rows, instance.slack[offset + rows], false, s, true), s)
 end
@@ -82,16 +82,16 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.DualStatus)
         m.solve_stat = MOI.OtherResultStatus
     end
 end
-function MOI.canget(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ::CR)
+function MOI.canget(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ::CI)
     instance.ret_val != ECOS_DINF
 end
-_dual(instance, cr::CR{<:MOI.AbstractFunction, <:ZeroCones}) = instance.dual_eq
-_dual(instance, cr::CR) = instance.dual_ineq
-function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintDual, cr::CR)
-    offset = instance.constrmap[cr.value]
-    s = MOI.get(instance, MOI.ConstraintSet(), cr)
+_dual(instance, ci::CI{<:MOI.AbstractFunction, <:ZeroCones}) = instance.dual_eq
+_dual(instance, ci::CI) = instance.dual_ineq
+function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ci::CI)
+    offset = instance.constrmap[ci.value]
+    s = MOI.get(instance, MOI.ConstraintSet(), ci)
     rows = constrrows(s)
-    scalecoef(rows, _dual(instance, cr)[offset + rows], false, s, true)
+    scalecoef(rows, _dual(instance, ci)[offset + rows], false, s, true)
 end
 
 MOI.canget(instance::ECOSSolverInstance, ::MOI.ResultCount) = true

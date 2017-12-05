@@ -18,24 +18,24 @@ mutable struct Cone
 end
 
 # Computes cone dimensions
-constrcall(cone::Cone, cr, f, s::ZeroCones) = cone.f += _dim(s)
-constrcall(cone::Cone, cr, f, s::LPCones) = cone.l += _dim(s)
-function constrcall(cone::Cone, cr, f, s::MOI.SecondOrderCone)
+constrcall(cone::Cone, ci, f, s::ZeroCones) = cone.f += _dim(s)
+constrcall(cone::Cone, ci, f, s::LPCones) = cone.l += _dim(s)
+function constrcall(cone::Cone, ci, f, s::MOI.SecondOrderCone)
     push!(cone.qa, s.dimension)
     cone.q += _dim(s)
 end
 
 # Fill constrmap
-function constrcall(cone::Cone, constrmap::Dict, cr, f, s::ZeroCones)
-    constrmap[cr.value] = cone.fcur
+function constrcall(cone::Cone, constrmap::Dict, ci, f, s::ZeroCones)
+    constrmap[ci.value] = cone.fcur
     cone.fcur += _dim(s)
 end
-function constrcall(cone::Cone, constrmap::Dict, cr, f, s::LPCones)
-    constrmap[cr.value] = cone.lcur
+function constrcall(cone::Cone, constrmap::Dict, ci, f, s::LPCones)
+    constrmap[ci.value] = cone.lcur
     cone.lcur += _dim(s)
 end
-function constrcall(cone::Cone, constrmap::Dict, cr, f, s::MOI.SecondOrderCone)
-    constrmap[cr.value] = cone.l + cone.qcur
+function constrcall(cone::Cone, constrmap::Dict, ci, f, s::MOI.SecondOrderCone)
+    constrmap[ci.value] = cone.l + cone.qcur
     cone.qcur += _dim(s)
 end
 
@@ -44,7 +44,7 @@ end
 # Build constraint matrix
 scalecoef(rows, coef, minus, s, rev) = minus ? -coef : coef
 scalecoef(rows, coef, minus, s::Union{MOI.LessThan, MOI.Nonpositives}, rev) = minus ? coef : -coef
-_varmap(varmap, f) = map(vr -> varmap[vr], f.variables)
+_varmap(varmap, f) = map(vi -> varmap[vi], f.variables)
 _constant(s::MOI.EqualTo) = s.value
 _constant(s::MOI.GreaterThan) = s.lower
 _constant(s::MOI.LessThan) = s.upper
@@ -54,13 +54,13 @@ relevantmatrix(eq::Type{Val{false}}, s::ZeroCones) = false
 relevantmatrix(eq::Type{Val{true}}, s::ZeroCones) = true
 relevantmatrix(eq::Type{Val{false}}, s::Union{LPCones, MOI.SecondOrderCone}) = true
 relevantmatrix(eq::Type{Val{true}}, s::Union{LPCones, MOI.SecondOrderCone}) = false
-constrcall(eq, I, J, V, b, varmap, constrmap, cr, f::MOI.SingleVariable, s) = constrcall(eq, I, J, V, b, varmap, constrmap, cr, MOI.ScalarAffineFunction{Float64}(f), s)
-function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, cr, f::MOI.ScalarAffineFunction, s)
+constrcall(eq, I, J, V, b, varmap, constrmap, ci, f::MOI.SingleVariable, s) = constrcall(eq, I, J, V, b, varmap, constrmap, ci, MOI.ScalarAffineFunction{Float64}(f), s)
+function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, ci, f::MOI.ScalarAffineFunction, s)
     relevantmatrix(eq, s) || return
     a = sparsevec(_varmap(varmap, f), f.coefficients)
     # sparsevec combines duplicates with + but does not remove zeros created so we call dropzeros!
     dropzeros!(a)
-    offset = constrmap[cr.value]
+    offset = constrmap[ci.value]
     row = constrrows(s)
     i = offset + row
     # The ECOS format is b - Ax ∈ cone
@@ -71,8 +71,8 @@ function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, cr, f::MOI.Sc
     append!(J, a.nzind)
     append!(V, scalecoef(row, a.nzval, true, s, false))
 end
-constrcall(eq, I, J, V, b, varmap, constrmap, cr, f::MOI.VectorOfVariables, s) = constrcall(eq, I, J, V, b, varmap, constrmap, cr, MOI.VectorAffineFunction{Float64}(f), s)
-function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, cr, f::MOI.VectorAffineFunction, s)
+constrcall(eq, I, J, V, b, varmap, constrmap, ci, f::MOI.VectorOfVariables, s) = constrcall(eq, I, J, V, b, varmap, constrmap, ci, MOI.VectorAffineFunction{Float64}(f), s)
+function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, ci, f::MOI.VectorAffineFunction, s)
     relevantmatrix(eq, s) || return
     A = sparse(f.outputindex, _varmap(varmap, f), f.coefficients)
     # sparse combines duplicates with + but does not remove zeros created so we call dropzeros!
@@ -82,7 +82,7 @@ function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, cr, f::MOI.Ve
         colval[A.colptr[col]:(A.colptr[col+1]-1)] = col
     end
     @assert !any(iszero.(colval))
-    offset = constrmap[cr.value]
+    offset = constrmap[ci.value]
     rows = constrrows(s)
     i = offset + rows
     # The ECOS format is b - Ax ∈ cone
@@ -104,10 +104,10 @@ function MOI.optimize!(instance::ECOSSolverInstance)
     instance.constrmap = Dict{UInt64, Int}()
     MOIU.broadcastcall(constrs -> constrcall((cone, instance.constrmap), constrs), instance.data)
     vcur = 0
-    instance.varmap = Dict{VR, Int}()
-    for vr in MOI.get(instance.data, MOI.ListOfVariableReferences())
+    instance.varmap = Dict{VI, Int}()
+    for vi in MOI.get(instance.data, MOI.ListOfVariableIndices())
         vcur += 1
-        instance.varmap[vr] = vcur
+        instance.varmap[vi] = vcur
     end
     @assert vcur == MOI.get(instance.data, MOI.NumberOfVariables())
     m = cone.l + cone.q

@@ -4,8 +4,8 @@ export ECOSInstance
 
 using MathOptInterface
 const MOI = MathOptInterface
-const CR = MOI.ConstraintReference
-const VR = MOI.VariableReference
+const CI = MOI.ConstraintIndex
+const VI = MOI.VariableIndex
 
 using MathOptInterfaceUtilities
 const MOIU = MathOptInterfaceUtilities
@@ -16,8 +16,8 @@ using ECOS
 
 mutable struct ECOSSolverInstance <: MOI.AbstractSolverInstance
     data::ECOSInstanceData{Float64}
-    varmap::Dict{VR, Int}
-    constrmap::Dict{UInt64, Int}
+    varmap::Dict{VI, Int}
+    constrmap::Dict{Int64, Int}
     ret_val::Int
     primal::Vector{Float64}
     dual_eq::Vector{Float64}
@@ -25,7 +25,7 @@ mutable struct ECOSSolverInstance <: MOI.AbstractSolverInstance
     slack::Vector{Float64}
     objval::Float64
     function ECOSSolverInstance()
-        new(ECOSInstanceData{Float64}(), Dict{VR, Int}(), Dict{UInt64, Int}(), 1, Float64[], Float64[], Float64[], Float64[], 0.)
+        new(ECOSInstanceData{Float64}(), Dict{VI, Int}(), Dict{Int64, Int}(), 1, Float64[], Float64[], Float64[], Float64[], 0.)
     end
 end
 
