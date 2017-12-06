@@ -131,10 +131,10 @@ function MOI.optimize!(instance::ECOSSolverInstance)
     ecos_prob_ptr = ECOS.setup(n, m, cone.f, cone.l, length(cone.qa), cone.qa, 0, G, A, c[:], h, b)
     instance.ret_val = ECOS.solve(ecos_prob_ptr)
     ecos_prob = unsafe_wrap(Array, ecos_prob_ptr, 1)[1]
-    instance.primal    = unsafe_wrap(Array,ecos_prob.x, m.nvar)[:]
-    instance.dual_eq   = unsafe_wrap(Array,ecos_prob.y, m.neq)[:]
-    instance.dual_ineq = unsafe_wrap(Array,ecos_prob.z, m.nineq)[:]
-    instance.slack     = unsafe_wrap(Array,ecos_prob.s, m.nineq)[:]
-    cleanup(ecos_prob_ptr, 0)
+    instance.primal    = unsafe_wrap(Array, ecos_prob.x, n)[:]
+    instance.dual_eq   = unsafe_wrap(Array, ecos_prob.y, cone.f)[:]
+    instance.dual_ineq = unsafe_wrap(Array, ecos_prob.z, m)[:]
+    instance.slack     = unsafe_wrap(Array, ecos_prob.s, m)[:]
+    ECOS.cleanup(ecos_prob_ptr, 0)
     instance.objval = dot(c0, instance.primal) + f.constant
 end
