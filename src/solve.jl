@@ -121,9 +121,9 @@ function MOI.optimize!(instance::ECOSSolverInstance)
     IG = Int[]
     JG = Int[]
     VG = Float64[]
-    G = sparse(IG, JG, VG, m, n)
     h = zeros(m)
     MOIU.broadcastcall(constrs -> constrcall((Val{false}, IG, JG, VG, h, instance.varmap, instance.constrmap), constrs), instance.data)
+    G = sparse(IG, JG, VG, m, n)
     f = MOI.get(instance.data, MOI.ObjectiveFunction())
     c0 = full(sparsevec(_varmap(instance.varmap, f), f.coefficients, n))
     c = MOI.get(instance.data, MOI.ObjectiveSense()) == MOI.MaxSense ? -c0 : c0
