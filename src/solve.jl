@@ -12,6 +12,8 @@ mutable struct Cone
     q::Int # length of SOC cone
     qcur::Int
     qa::Vector{Int} # array of second-order cone constraints
+    ep::Int # number of primal exponential cone triples
+    epcur::Int
     function Cone()
         new(0, 0, 0, 0, 0, 0, Int[])
     end
@@ -24,6 +26,7 @@ function constrcall(cone::Cone, ci, f, s::MOI.SecondOrderCone)
     push!(cone.qa, s.dimension)
     cone.q += _dim(s)
 end
+constrcall(cone::Cone, ci, f, s::MOI.ExponentialCone) = cone.ep += 1
 
 # Fill constrmap
 function constrcall(cone::Cone, constrmap::Dict, ci, f, s::ZeroCones)
@@ -37,6 +40,10 @@ end
 function constrcall(cone::Cone, constrmap::Dict, ci, f, s::MOI.SecondOrderCone)
     constrmap[ci.value] = cone.l + cone.qcur
     cone.qcur += _dim(s)
+end
+function constrcall(cone::Cone, constrmap::Dict, ci, f, s::MOI.ExponentialCone)
+    constrmap[ci.value] = cone.l + cone.q + cone.epcur
+    cone.epcur += _dim(s)
 end
 
 # Vectorized length for matrix dimension n
@@ -52,8 +59,8 @@ constrrows(::MOI.AbstractScalarSet) = 1
 constrrows(s::MOI.AbstractVectorSet) = 1:MOI.dimension(s)
 relevantmatrix(eq::Type{Val{false}}, s::ZeroCones) = false
 relevantmatrix(eq::Type{Val{true}}, s::ZeroCones) = true
-relevantmatrix(eq::Type{Val{false}}, s::Union{LPCones, MOI.SecondOrderCone}) = true
-relevantmatrix(eq::Type{Val{true}}, s::Union{LPCones, MOI.SecondOrderCone}) = false
+relevantmatrix(eq::Type{Val{false}}, s::Union{LPCones, MOI.SecondOrderCone, MOI.ExponentialCone}) = true
+relevantmatrix(eq::Type{Val{true}}, s::Union{LPCones, MOI.SecondOrderCone, MOI.ExponentialCone}) = false
 constrcall(eq, I, J, V, b, varmap, constrmap, ci, f::MOI.SingleVariable, s) = constrcall(eq, I, J, V, b, varmap, constrmap, ci, MOI.ScalarAffineFunction{Float64}(f), s)
 function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, ci, f::MOI.ScalarAffineFunction, s)
     relevantmatrix(eq, s) || return
@@ -110,24 +117,27 @@ function MOI.optimize!(instance::ECOSSolverInstance)
         instance.varmap[vi] = vcur
     end
     @assert vcur == MOI.get(instance.data, MOI.NumberOfVariables())
-    m = cone.l + cone.q
+    @show cone.ep
+    @show cone.l
+    @show cone.q
+    m = cone.l + cone.q + 3cone.ep
     n = vcur
     IA = Int[]
     JA = Int[]
     VA = Float64[]
     b = zeros(cone.f)
     MOIU.broadcastcall(constrs -> constrcall((Val{true}, IA, JA, VA, b, instance.varmap, instance.constrmap), constrs), instance.data)
-    A = sparse(IA, JA, VA, cone.f, n)
+    A = ECOS.ECOSMatrix(sparse(IA, JA, VA, cone.f, n))
     IG = Int[]
     JG = Int[]
     VG = Float64[]
     h = zeros(m)
     MOIU.broadcastcall(constrs -> constrcall((Val{false}, IG, JG, VG, h, instance.varmap, instance.constrmap), constrs), instance.data)
-    G = sparse(IG, JG, VG, m, n)
+    G = ECOS.ECOSMatrix(sparse(IG, JG, VG, m, n))
     f = MOI.get(instance.data, MOI.ObjectiveFunction())
     c0 = full(sparsevec(_varmap(instance.varmap, f), f.coefficients, n))
     c = MOI.get(instance.data, MOI.ObjectiveSense()) == MOI.MaxSense ? -c0 : c0
-    ecos_prob_ptr = ECOS.setup(n, m, cone.f, cone.l, length(cone.qa), cone.qa, 0, G, A, c, h, b)
+    ecos_prob_ptr = ECOS.setup(n, m, cone.f, cone.l, length(cone.qa), cone.qa, cone.ep, G, A, c, h, b)
     instance.ret_val = ECOS.solve(ecos_prob_ptr)
     ecos_prob = unsafe_wrap(Array, ecos_prob_ptr, 1)[1]
     instance.primal    = unsafe_wrap(Array, ecos_prob.x, n)[:]
