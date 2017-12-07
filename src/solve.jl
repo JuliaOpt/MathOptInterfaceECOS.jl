@@ -127,8 +127,7 @@ function MOI.optimize!(instance::ECOSSolverInstance)
     f = MOI.get(instance.data, MOI.ObjectiveFunction())
     c0 = full(sparsevec(_varmap(instance.varmap, f), f.coefficients, n))
     c = MOI.get(instance.data, MOI.ObjectiveSense()) == MOI.MaxSense ? -c0 : c0
-    # FIXME MPB wrapper is doing c[:]
-    ecos_prob_ptr = ECOS.setup(n, m, cone.f, cone.l, length(cone.qa), cone.qa, 0, G, A, c[:], h, b)
+    ecos_prob_ptr = ECOS.setup(n, m, cone.f, cone.l, length(cone.qa), cone.qa, 0, G, A, c, h, b)
     instance.ret_val = ECOS.solve(ecos_prob_ptr)
     ecos_prob = unsafe_wrap(Array, ecos_prob_ptr, 1)[1]
     instance.primal    = unsafe_wrap(Array, ecos_prob.x, n)[:]
