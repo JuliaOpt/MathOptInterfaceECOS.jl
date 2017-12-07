@@ -38,6 +38,8 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.PrimalStatus)
         m.solve_stat = MOI.OtherResultStatus
     end
 end
+# Swapping indices 2 <-> 3 is an involution (it is its own inverse)
+const reorderval = orderval
 function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::MOI.Index)
     instance.ret_val != ECOS.ECOS_PINF
 end
@@ -64,7 +66,7 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI)
     offset = instance.constrmap[ci.value]
     s = MOI.get(instance, MOI.ConstraintSet(), ci)
     rows = constrrows(s)
-    _unshift(scalecoef(rows, instance.slack[offset + rows], false, s, true), s)
+    _unshift(scalecoef(rows, reorderval(instance.slack[offset + rows], s), false, s, true), s)
 end
 
 function MOI.canget(instance::ECOSSolverInstance, ::MOI.DualStatus)
@@ -95,7 +97,7 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ci::CI)
     offset = instance.constrmap[ci.value]
     s = MOI.get(instance, MOI.ConstraintSet(), ci)
     rows = constrrows(s)
-    scalecoef(rows, _dual(instance, ci)[offset + rows], false, s, true)
+    scalecoef(rows, reorderval(_dual(instance, ci)[offset + rows], s), false, s, true)
 end
 
 MOI.canget(instance::ECOSSolverInstance, ::MOI.ResultCount) = true

@@ -79,6 +79,16 @@ function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, ci, f::MOI.Sc
     append!(V, scalecoef(row, a.nzval, true, s, false))
 end
 constrcall(eq, I, J, V, b, varmap, constrmap, ci, f::MOI.VectorOfVariables, s) = constrcall(eq, I, J, V, b, varmap, constrmap, ci, MOI.VectorAffineFunction{Float64}(f), s)
+# SCS orders differently than MOI the second and third dimension of the exponential cone
+orderval(val, s) = val
+function orderval(val, s::MOI.ExponentialCone)
+    val[[1, 3, 2]]
+end
+orderidx(idx, s) = idx
+expmap(i) = (1, 3, 2)[i]
+function orderidx(idx, s::MOI.ExponentialCone)
+    expmap.(idx)
+end
 function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, ci, f::MOI.VectorAffineFunction, s)
     relevantmatrix(eq, s) || return
     A = sparse(f.outputindex, _varmap(varmap, f), f.coefficients)
@@ -94,8 +104,8 @@ function constrcall(eq, I, J, V, b, varmap::Dict, constrmap::Dict, ci, f::MOI.Ve
     i = offset + rows
     # The ECOS format is b - Ax ∈ cone
     # so minus=false for b and minus=true for A
-    b[i] = scalecoef(rows, f.constant, false, s, false)
-    append!(I, offset + A.rowval)
+    b[i] = scalecoef(rows, orderval(f.constant, s), false, s, false)
+    append!(I, offset + orderidx(A.rowval, s))
     append!(J, colval)
     append!(V, scalecoef(A.rowval, A.nzval, true, s, false))
 end
