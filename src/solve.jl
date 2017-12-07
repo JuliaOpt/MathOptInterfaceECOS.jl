@@ -15,7 +15,7 @@ mutable struct Cone
     ep::Int # number of primal exponential cone triples
     epcur::Int
     function Cone()
-        new(0, 0, 0, 0, 0, 0, Int[])
+        new(0, 0, 0, 0, 0, 0, Int[], 0, 0)
     end
 end
 
@@ -117,9 +117,6 @@ function MOI.optimize!(instance::ECOSSolverInstance)
         instance.varmap[vi] = vcur
     end
     @assert vcur == MOI.get(instance.data, MOI.NumberOfVariables())
-    @show cone.ep
-    @show cone.l
-    @show cone.q
     m = cone.l + cone.q + 3cone.ep
     n = vcur
     IA = Int[]
