@@ -1,6 +1,6 @@
 MOI.canget(instance::ECOSSolverInstance, ::MOI.TerminationStatus) = true
 function MOI.get(instance::ECOSSolverInstance, ::MOI.TerminationStatus)
-    flag = instance.ret_val
+    flag = instance.sol.ret_val
     if flag == ECOS.ECOS_OPTIMAL
         MOI.Success
     elseif flag == ECOS.ECOS_PINF
@@ -17,13 +17,13 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.TerminationStatus)
 end
 
 MOI.canget(instance::ECOSSolverInstance, ::MOI.ObjectiveValue) = true
-MOI.get(instance::ECOSSolverInstance, ::MOI.ObjectiveValue) = instance.objval
+MOI.get(instance::ECOSSolverInstance, ::MOI.ObjectiveValue) = instance.sol.objval
 
 function MOI.canget(instance::ECOSSolverInstance, ::MOI.PrimalStatus)
-    instance.ret_val != ECOS.ECOS_PINF
+    instance.sol.ret_val != ECOS.ECOS_PINF
 end
 function MOI.get(instance::ECOSSolverInstance, ::MOI.PrimalStatus)
-    flag = instance.ret_val
+    flag = instance.sol.ret_val
     if flag == ECOS.ECOS_OPTIMAL
         MOI.FeasiblePoint
     elseif flag == ECOS.ECOS_PINF
@@ -41,39 +41,42 @@ end
 # Swapping indices 2 <-> 3 is an involution (it is its own inverse)
 const reorderval = orderval
 function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::MOI.Index)
-    instance.ret_val != ECOS.ECOS_PINF
+    instance.sol.ret_val != ECOS.ECOS_PINF
 end
 function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::Vector{<:MOI.Index})
-    instance.ret_val != ECOS.ECOS_PINF
+    instance.sol.ret_val != ECOS.ECOS_PINF
 end
 function MOI.get(instance::ECOSSolverInstance, ::MOI.VariablePrimal, vi::VI)
-    instance.primal[instance.varmap[vi]]
+    vi = instance.idxmap[vi]
+    instance.sol.primal[vi.value]
 end
 MOI.get(instance::ECOSSolverInstance, a::MOI.VariablePrimal, vi::Vector{VI}) = MOI.get.(instance, a, vi)
-_unshift(value, s) = value
-_unshift(value, s::MOI.EqualTo) = value + s.value
-_unshift(value, s::MOI.GreaterThan) = value + s.lower
-_unshift(value, s::MOI.LessThan) = value + s.upper
+setconstant(instance::ECOSSolverInstance, offset, ::CI{<:MOI.AbstractFunction, <:MOI.EqualTo}) = instance.cone.eqsetconstant[offset]
+setconstant(instance::ECOSSolverInstance, offset, ::CI) = instance.cone.ineqsetconstant[offset]
+_unshift(instance::ECOSSolverInstance, offset, value, ::CI) = value
+_unshift(instance::ECOSSolverInstance, offset, value, ci::CI{<:MOI.AbstractScalarFunction, <:MOI.AbstractScalarSet}) = value + setconstant(instance, offset, ci)
 function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI{<:MOI.AbstractFunction, MOI.Zeros})
-    s = MOI.get(instance, MOI.ConstraintSet(), ci)
-    zeros(MOI.dimension(s))
+    ci = instance.idxmap[ci]
+    rows = constrrows(instance, ci)
+    zeros(length(rows))
 end
 function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI{<:MOI.AbstractFunction, <:MOI.EqualTo})
-    s = MOI.get(instance, MOI.ConstraintSet(), ci)
-    s.value
+    ci = instance.idxmap[ci]
+    offset = constroffset(instance, ci)
+    setconstant(instance, offset, ci)
 end
-function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI)
-    offset = instance.constrmap[ci.value]
-    s = MOI.get(instance, MOI.ConstraintSet(), ci)
-    rows = constrrows(s)
-    _unshift(scalecoef(rows, reorderval(instance.slack[offset + rows], s), false, s, true), s)
+function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintPrimal, ci::CI{<:MOI.AbstractFunction, S}) where S <: MOI.AbstractSet
+    ci = instance.idxmap[ci]
+    offset = constroffset(instance, ci)
+    rows = constrrows(instance, ci)
+    _unshift(instance, offset, scalecoef(rows, reorderval(instance.sol.slack[offset + rows], S), false, S), ci)
 end
 
 function MOI.canget(instance::ECOSSolverInstance, ::MOI.DualStatus)
-    instance.ret_val != ECOS.ECOS_DINF
+    instance.sol.ret_val != ECOS.ECOS_DINF
 end
 function MOI.get(instance::ECOSSolverInstance, ::MOI.DualStatus)
-    flag = instance.ret_val
+    flag = instance.sol.ret_val
     if flag == ECOS.ECOS_OPTIMAL
         MOI.FeasiblePoint
     elseif flag == ECOS.ECOS_PINF
@@ -89,15 +92,15 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.DualStatus)
     end
 end
 function MOI.canget(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ::CI)
-    instance.ret_val != ECOS.ECOS_DINF
+    instance.sol.ret_val != ECOS.ECOS_DINF
 end
-_dual(instance, ci::CI{<:MOI.AbstractFunction, <:ZeroCones}) = instance.dual_eq
-_dual(instance, ci::CI) = instance.dual_ineq
-function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ci::CI)
-    offset = instance.constrmap[ci.value]
-    s = MOI.get(instance, MOI.ConstraintSet(), ci)
-    rows = constrrows(s)
-    scalecoef(rows, reorderval(_dual(instance, ci)[offset + rows], s), false, s, true)
+_dual(instance, ci::CI{<:MOI.AbstractFunction, <:ZeroCones}) = instance.sol.dual_eq
+_dual(instance, ci::CI) = instance.sol.dual_ineq
+function MOI.get(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ci::CI{<:MOI.AbstractFunction, S}) where S <: MOI.AbstractSet
+    ci = instance.idxmap[ci]
+    offset = constroffset(instance, ci)
+    rows = constrrows(instance, ci)
+    scalecoef(rows, reorderval(_dual(instance, ci)[offset + rows], S), false, S)
 end
 
 MOI.canget(instance::ECOSSolverInstance, ::MOI.ResultCount) = true

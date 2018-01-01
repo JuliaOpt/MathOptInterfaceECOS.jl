@@ -5,7 +5,8 @@ using MathOptInterfaceTests
 const MOIT = MathOptInterfaceTests
 
 const solver = () -> ECOSInstance()
-const config = MOIT.TestConfig(1e-7, 1e-7, true, true, true, true)
+# SOC2 requires 1e-5
+const config = MOIT.TestConfig(1e-5, 1e-5, true, true, true, true)
 
 @testset "Continuous linear problems" begin
     MOIT.contlineartest(solver, config)

@@ -14,25 +14,27 @@ MOIU.@instance ECOSInstanceData () (EqualTo, GreaterThan, LessThan) (Zeros, Nonn
 
 using ECOS
 
+include("types.jl")
+
 mutable struct ECOSSolverInstance <: MOI.AbstractSolverInstance
-    data::ECOSInstanceData{Float64}
-    varmap::Dict{VI, Int}
-    constrmap::Dict{Int64, Int}
-    ret_val::Int
-    primal::Vector{Float64}
-    dual_eq::Vector{Float64}
-    dual_ineq::Vector{Float64}
-    slack::Vector{Float64}
-    objval::Float64
+    instancedata::ECOSInstanceData{Float64} # Will be removed when
+    idxmap::MOIU.IndexMap                   # InstanceManager is ready
+    cone::Cone
+    data::Union{Void, Data} # only non-Void between MOI.copy! and MOI.optimize!
+    sol::Solution
     function ECOSSolverInstance()
-        new(ECOSInstanceData{Float64}(), Dict{VI, Int}(), Dict{Int64, Int}(), 1, Float64[], Float64[], Float64[], Float64[], 0.)
+        new(ECOSInstanceData{Float64}(), MOIU.IndexMap(), Cone(), nothing, Solution())
     end
 end
+
+function MOI.empty!(instance::ECOSSolverInstance) end
 
 @bridge SplitInterval MOIU.SplitIntervalBridge () (Interval,) () () () (ScalarAffineFunction,) () ()
 @bridge GeoMean MOIU.GeoMeanBridge () () (GeometricMeanCone,) () () () (VectorOfVariables,) (VectorAffineFunction,)
 
 ECOSInstance() = GeoMean{Float64}(SplitInterval{Float64}(ECOSSolverInstance()))
+
+MOI.copy!(dest::ECOSSolverInstance, src::MOI.AbstractInstance) = MOIU.allocateload!(dest, src)
 
 # Redirect data modification calls to data
 include("data.jl")
