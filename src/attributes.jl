@@ -40,10 +40,7 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.PrimalStatus)
 end
 # Swapping indices 2 <-> 3 is an involution (it is its own inverse)
 const reorderval = orderval
-function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::MOI.Index)
-    instance.sol.ret_val != ECOS.ECOS_PINF
-end
-function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::Vector{<:MOI.Index})
+function MOI.canget(instance::ECOSSolverInstance, ::Union{MOI.VariablePrimal, MOI.ConstraintPrimal}, ::Type{<:MOI.Index})
     instance.sol.ret_val != ECOS.ECOS_PINF
 end
 function MOI.get(instance::ECOSSolverInstance, ::MOI.VariablePrimal, vi::VI)
@@ -91,7 +88,7 @@ function MOI.get(instance::ECOSSolverInstance, ::MOI.DualStatus)
         m.solve_stat = MOI.OtherResultStatus
     end
 end
-function MOI.canget(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ::CI)
+function MOI.canget(instance::ECOSSolverInstance, ::MOI.ConstraintDual, ::Type{<:CI})
     instance.sol.ret_val != ECOS.ECOS_DINF
 end
 _dual(instance, ci::CI{<:MOI.AbstractFunction, <:ZeroCones}) = instance.sol.dual_eq

@@ -31,6 +31,7 @@ function _allocateconstraint!(cone::Cone, f, s::MOI.ExponentialCone)
     ci
 end
 constroffset(instance::ECOSSolverInstance, ci::CI) = constroffset(instance.cone, ci::CI)
+MOIU.canallocateconstraint(::ECOSSolverInstance, ::SF, ::SS) = true
 function MOIU.allocateconstraint!(instance::ECOSSolverInstance, f::F, s::S) where {F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
     CI{F, S}(_allocateconstraint!(instance.cone, f, s))
 end
@@ -51,6 +52,7 @@ constrrows(instance::ECOSSolverInstance, ci::CI{<:MOI.AbstractVectorFunction, <:
 matrix(data::Data, s::ZeroCones) = data.b, data.IA, data.JA, data.VA
 matrix(data::Data, s::Union{LPCones, MOI.SecondOrderCone, MOI.ExponentialCone}) = data.h, data.IG, data.JG, data.VG
 matrix(instance::ECOSSolverInstance, s) = matrix(instance.data, s)
+MOIU.canloadconstraint(::ECOSSolverInstance, ::SF, ::SS) = true
 MOIU.loadconstraint!(instance::ECOSSolverInstance, ci, f::MOI.SingleVariable, s) = MOIU.loadconstraint!(instance, ci, MOI.ScalarAffineFunction{Float64}(f), s)
 function MOIU.loadconstraint!(instance::ECOSSolverInstance, ci, f::MOI.ScalarAffineFunction, s::MOI.AbstractScalarSet)
     a = sparsevec(_varmap(f), f.coefficients)
@@ -128,20 +130,29 @@ function MOIU.loadvariables!(instance::ECOSSolverInstance, nvars::Integer)
     VG = Float64[]
     h = zeros(m)
     c = zeros(nvars)
-    instance.data = Data(m, nvars, IA, JA, VA, b, IG, JG, VG, h, 0., false, c)
+    instance.data = Data(m, nvars, IA, JA, VA, b, IG, JG, VG, h, 0., c)
 end
 
-function MOIU.allocateobjective!(instance::ECOSSolverInstance, sense::MOI.OptimizationSense, f::MOI.ScalarAffineFunction) end
+MOIU.canallocate(::ECOSSolverInstance, ::MOI.ObjectiveSense) = true
+function MOIU.allocate!(instance::ECOSSolverInstance, ::MOI.ObjectiveSense, sense::MOI.OptimizationSense)
+    instance.maxsense = sense == MOI.MaxSense
+end
+MOIU.canallocate(::ECOSSolverInstance, ::MOI.ObjectiveFunction) = true
+function MOIU.allocate!(::ECOSSolverInstance, ::MOI.ObjectiveFunction, ::MOI.ScalarAffineFunction) end
 
-function MOIU.loadobjective!(instance::ECOSSolverInstance, sense::MOI.OptimizationSense, f::MOI.ScalarAffineFunction)
+MOIU.canload(::ECOSSolverInstance, ::MOI.ObjectiveSense) = true
+function MOIU.load!(::ECOSSolverInstance, ::MOI.ObjectiveSense, ::MOI.OptimizationSense) end
+MOIU.canload(::ECOSSolverInstance, ::MOI.ObjectiveFunction) = true
+function MOIU.load!(instance::ECOSSolverInstance, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction)
     c0 = full(sparsevec(_varmap(f), f.coefficients, instance.data.n))
     instance.data.objconstant = f.constant
-    instance.data.maxsense = sense == MOI.MaxSense
-    instance.data.c = instance.data.maxsense ? -c0 : c0
+    instance.data.c = instance.maxsense ? -c0 : c0
 end
 
 function MOI.optimize!(instance::ECOSSolverInstance)
-    instance.idxmap = MOI.copy!(instance, instance.instancedata)
+    res = MOI.copy!(instance, instance.instancedata)
+    @assert res.status == MOI.CopySuccess
+    instance.idxmap = res.indexmap
     cone = instance.cone
     m = instance.data.m
     n = instance.data.n
@@ -150,7 +161,6 @@ function MOI.optimize!(instance::ECOSSolverInstance)
     G = ECOS.ECOSMatrix(sparse(instance.data.IG, instance.data.JG, instance.data.VG, m, n))
     h = instance.data.h
     objconstant = instance.data.objconstant
-    maxsense = instance.data.maxsense
     c = instance.data.c
     instance.data = nothing # Allows GC to free instance.data before A is loaded to ECOS
     ecos_prob_ptr = ECOS.setup(n, m, cone.f, cone.l, length(cone.qa), cone.qa, cone.ep, G, A, c, h, b)
@@ -161,6 +171,6 @@ function MOI.optimize!(instance::ECOSSolverInstance)
     dual_ineq = unsafe_wrap(Array, ecos_prob.z, m)[:]
     slack     = unsafe_wrap(Array, ecos_prob.s, m)[:]
     ECOS.cleanup(ecos_prob_ptr, 0)
-    objval = (maxsense ? -1 : 1) * dot(c, primal) + objconstant
+    objval = (instance.maxsense ? -1 : 1) * dot(c, primal) + objconstant
     instance.sol = Solution(ret_val, primal, dual_eq, dual_ineq, slack, objval)
 end

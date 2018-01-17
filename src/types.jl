@@ -21,7 +21,6 @@ mutable struct Data
     VG::Vector{Float64}
     h::Vector{Float64}
     objconstant::Float64
-    maxsense::Bool
     c::Vector{Float64}
 end
 
