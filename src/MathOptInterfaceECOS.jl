@@ -36,7 +36,8 @@ function MOI.empty!(instance::ECOSInstance)
     instance.data = nothing # It should already be nothing except if an error is thrown inside copy!
 end
 
-MOIU.needsallocateload(dest::ECOSInstance) = true
+MOI.canaddvariable(instance::ECOSInstance) = false
+MOIU.needsallocateload(instance::ECOSInstance) = true
 MOI.copy!(dest::ECOSInstance, src::MOI.AbstractInstance) = MOIU.allocateload!(dest, src)
 
 # Implements optimize! : translate data to ECOSData and call ECOS_solve
