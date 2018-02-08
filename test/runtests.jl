@@ -12,11 +12,13 @@ const MOIU = MathOptInterfaceUtilities
 
 MOIU.@instance ECOSInstanceData () (EqualTo, GreaterThan, LessThan) (Zeros, Nonnegatives, Nonpositives, SecondOrderCone, ExponentialCone) () (SingleVariable,) (ScalarAffineFunction,) (VectorOfVariables,) (VectorAffineFunction,)
 
+MOIU.@bridge SplitInterval MOIU.SplitIntervalBridge () (Interval,) () () () (ScalarAffineFunction,) () ()
+
 # SOC2 requires 1e-5
 const config = MOIT.TestConfig(atol=1e-5, rtol=1e-5)
 
 @testset "Continuous linear problems" begin
-    MOIT.contlineartest(MOIU.InstanceManager(ECOSInstanceData{Float64}(), ECOSInstance()), config, ["linear10"])
+    MOIT.contlineartest(SplitInterval{Float64}(MOIU.InstanceManager(ECOSInstanceData{Float64}(), ECOSInstance())), config)
 end
 
 @testset "Continuous conic problems" begin
