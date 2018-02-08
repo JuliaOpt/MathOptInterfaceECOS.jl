@@ -13,38 +13,32 @@ const MOIU = MathOptInterfaceUtilities
 const SF = Union{MOI.SingleVariable, MOI.ScalarAffineFunction{Float64}, MOI.VectorOfVariables, MOI.VectorAffineFunction{Float64}}
 const SS = Union{MOI.EqualTo{Float64}, MOI.GreaterThan{Float64}, MOI.LessThan{Float64}, MOI.Zeros, MOI.Nonnegatives, MOI.Nonpositives, MOI.SecondOrderCone, MOI.ExponentialCone}
 
-MOIU.@instance ECOSInstanceData () (EqualTo, GreaterThan, LessThan) (Zeros, Nonnegatives, Nonpositives, SecondOrderCone, ExponentialCone) () (SingleVariable,) (ScalarAffineFunction,) (VectorOfVariables,) (VectorAffineFunction,)
-
 using ECOS
 
 include("types.jl")
 
-mutable struct ECOSSolverInstance <: MOI.AbstractSolverInstance
-    instancedata::ECOSInstanceData{Float64} # Will be removed when
-    idxmap::MOIU.IndexMap                   # InstanceManager is ready
+mutable struct ECOSInstance <: MOI.AbstractSolverInstance
     cone::Cone
     maxsense::Bool
     data::Union{Void, Data} # only non-Void between MOI.copy! and MOI.optimize!
     sol::Solution
-    function ECOSSolverInstance()
-        new(ECOSInstanceData{Float64}(), MOIU.IndexMap(), Cone(), false, nothing, Solution())
+    function ECOSInstance()
+        new(Cone(), false, nothing, Solution())
     end
 end
 
-function MOI.empty!(instance::ECOSSolverInstance)
+function MOI.isempty(instance::ECOSInstance)
+    !instance.maxsense && instance.data === nothing
+end
+
+function MOI.empty!(instance::ECOSInstance)
     instance.maxsense = false
     instance.data = nothing # It should already be nothing except if an error is thrown inside copy!
 end
 
-@bridge SplitInterval MOIU.SplitIntervalBridge () (Interval,) () () () (ScalarAffineFunction,) () ()
-@bridge GeoMean MOIU.GeoMeanBridge () () (GeometricMeanCone,) () () () (VectorOfVariables,) (VectorAffineFunction,)
-
-ECOSInstance() = GeoMean{Float64}(SplitInterval{Float64}(ECOSSolverInstance()))
-
-MOI.copy!(dest::ECOSSolverInstance, src::MOI.AbstractInstance) = MOIU.allocateload!(dest, src)
-
-# Redirect data modification calls to data
-include("data.jl")
+MOI.canaddvariable(instance::ECOSInstance) = false
+MOIU.needsallocateload(instance::ECOSInstance) = true
+MOI.copy!(dest::ECOSInstance, src::MOI.AbstractInstance) = MOIU.allocateload!(dest, src)
 
 # Implements optimize! : translate data to ECOSData and call ECOS_solve
 include("solve.jl")
