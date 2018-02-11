@@ -33,7 +33,7 @@ function _allocateconstraint!(cone::Cone, f, s::MOI.ExponentialCone)
     ci
 end
 constroffset(instance::ECOSInstance, ci::CI) = constroffset(instance.cone, ci::CI)
-MOIU.canallocateconstraint(::ECOSInstance, ::SF, ::SS) = true
+MOIU.canallocateconstraint(::ECOSInstance, ::Type{<:SF}, ::Type{<:SS}) = true
 function MOIU.allocateconstraint!(instance::ECOSInstance, f::F, s::S) where {F <: MOI.AbstractFunction, S <: MOI.AbstractSet}
     CI{F, S}(_allocateconstraint!(instance.cone, f, s))
 end
@@ -54,7 +54,7 @@ constrrows(instance::ECOSInstance, ci::CI{<:MOI.AbstractVectorFunction, <:MOI.Ab
 matrix(data::Data, s::ZeroCones) = data.b, data.IA, data.JA, data.VA
 matrix(data::Data, s::Union{LPCones, MOI.SecondOrderCone, MOI.ExponentialCone}) = data.h, data.IG, data.JG, data.VG
 matrix(instance::ECOSInstance, s) = matrix(instance.data, s)
-MOIU.canloadconstraint(::ECOSInstance, ::SF, ::SS) = true
+MOIU.canloadconstraint(::ECOSInstance, ::Type{<:SF}, ::Type{<:SS}) = true
 MOIU.loadconstraint!(instance::ECOSInstance, ci, f::MOI.SingleVariable, s) = MOIU.loadconstraint!(instance, ci, MOI.ScalarAffineFunction{Float64}(f), s)
 function MOIU.loadconstraint!(instance::ECOSInstance, ci, f::MOI.ScalarAffineFunction, s::MOI.AbstractScalarSet)
     a = sparsevec(_varmap(f), f.coefficients)
@@ -139,12 +139,12 @@ MOIU.canallocate(::ECOSInstance, ::MOI.ObjectiveSense) = true
 function MOIU.allocate!(instance::ECOSInstance, ::MOI.ObjectiveSense, sense::MOI.OptimizationSense)
     instance.maxsense = sense == MOI.MaxSense
 end
-MOIU.canallocate(::ECOSInstance, ::MOI.ObjectiveFunction) = true
+MOIU.canallocate(::ECOSInstance, ::MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}) = true
 function MOIU.allocate!(::ECOSInstance, ::MOI.ObjectiveFunction, ::MOI.ScalarAffineFunction) end
 
 MOIU.canload(::ECOSInstance, ::MOI.ObjectiveSense) = true
 function MOIU.load!(::ECOSInstance, ::MOI.ObjectiveSense, ::MOI.OptimizationSense) end
-MOIU.canload(::ECOSInstance, ::MOI.ObjectiveFunction) = true
+MOIU.canload(::ECOSInstance, ::MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}) = true
 function MOIU.load!(instance::ECOSInstance, ::MOI.ObjectiveFunction, f::MOI.ScalarAffineFunction)
     c0 = full(sparsevec(_varmap(f), f.coefficients, instance.data.n))
     instance.data.objconstant = f.constant
