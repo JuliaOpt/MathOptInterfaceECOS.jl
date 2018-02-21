@@ -2,4 +2,3 @@ julia 0.6
 Compat 0.47 # SparseArrays
 ECOS 0.8.0
 MathOptInterface
-MathOptInterfaceUtilities
