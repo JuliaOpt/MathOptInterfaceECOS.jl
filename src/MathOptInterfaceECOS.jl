@@ -37,6 +37,8 @@ end
 
 MOI.canaddvariable(instance::ECOSOptimizer) = false
 MOIU.needsallocateload(instance::ECOSOptimizer) = true
+MOI.supports(::ECOSOptimizer, ::MOI.ObjectiveFunction{MOI.ScalarAffineFunction{Float64}}) = true
+MOI.supportsconstraint(::ECOSOptimizer, ::Type{<:SF}, ::Type{<:SS}) = true
 MOI.copy!(dest::ECOSOptimizer, src::MOI.ModelLike) = MOIU.allocateload!(dest, src)
 
 # Implements optimize! : translate data to ECOSData and call ECOS_solve
